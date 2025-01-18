@@ -10,3 +10,6 @@ def get_cam_port():
 def get_file_port():
     port = 8000
     return port
+def get_key():
+    key = b'd6hb59jf0xpt42m1'
+    return key

